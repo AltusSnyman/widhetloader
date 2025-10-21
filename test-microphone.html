@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Permissions-Policy" content="microphone=(self https://beta.leadconnectorhq.com https://*.leadconnectorhq.com)">
+  <title>Microphone Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .test-section {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+    }
+    h2 {
+      color: #666;
+      font-size: 18px;
+      margin-top: 0;
+    }
+    button {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 10px 10px 0;
+    }
+    button:hover {
+      background: #3367d6;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .status {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .info {
+      background: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    .warning {
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffeaa7;
+    }
+    pre {
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    .log-entry {
+      padding: 5px;
+      margin: 2px 0;
+      font-family: monospace;
+      font-size: 12px;
+      border-left: 3px solid #4285f4;
+      padding-left: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎤 Microphone Permission Diagnostic</h1>
+  <p>This page tests microphone permissions in different contexts to help diagnose the issue.</p>
+
+  <div class="test-section">
+    <h2>1. Check Current Permission State</h2>
+    <button onclick="checkPermissionState()">Check Permission State</button>
+    <div id="permission-state"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>2. Request Microphone Permission</h2>
+    <button onclick="requestMicrophone()">Request Microphone Access</button>
+    <div id="request-result"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>3. Test Microphone Stream</h2>
+    <button onclick="testMicrophoneStream()">Test Microphone Stream</button>
+    <button onclick="stopMicrophone()" id="stop-btn" disabled>Stop Microphone</button>
+    <div id="stream-result"></div>
+    <canvas id="visualizer" width="600" height="100" style="display:none; background: #000; margin-top: 10px;"></canvas>
+  </div>
+
+  <div class="test-section">
+    <h2>4. Debug Information</h2>
+    <pre id="debug-info">Loading...</pre>
+  </div>
+
+  <div class="test-section">
+    <h2>5. Event Log</h2>
+    <div id="event-log"></div>
+  </div>
+
+  <script>
+    let audioStream = null;
+    let audioContext = null;
+    let analyser = null;
+    let animationId = null;
+
+    // Logging function
+    function log(message, type = 'info') {
+      const logDiv = document.getElementById('event-log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logDiv.insertBefore(entry, logDiv.firstChild);
+      console.log(message);
+    }
+
+    // Check permission state
+    async function checkPermissionState() {
+      const resultDiv = document.getElementById('permission-state');
+      log('Checking permission state...');
+
+      try {
+        const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+
+        let statusClass = 'info';
+        let statusText = '';
+
+        switch(permissionStatus.state) {
+          case 'granted':
+            statusClass = 'success';
+            statusText = '✅ GRANTED - Microphone permission is already granted!';
+            break;
+          case 'denied':
+            statusClass = 'error';
+            statusText = '❌ DENIED - Microphone permission was denied. You need to reset permissions.';
+            break;
+          case 'prompt':
+            statusClass = 'warning';
+            statusText = '⚠️ PROMPT - Permission not yet requested. Click "Request Microphone Access" to request it.';
+            break;
+        }
+
+        resultDiv.innerHTML = `<div class="status ${statusClass}">${statusText}</div>`;
+        log(`Permission state: ${permissionStatus.state}`);
+
+        // Listen for permission changes
+        permissionStatus.onchange = () => {
+          log(`Permission state changed to: ${permissionStatus.state}`);
+          checkPermissionState();
+        };
+
+      } catch (error) {
+        resultDiv.innerHTML = `<div class="status error">❌ Error checking permission: ${error.message}</div>`;
+        log(`Error checking permission: ${error.message}`, 'error');
+      }
+    }
+
+    // Request microphone permission
+    async function requestMicrophone() {
+      const resultDiv = document.getElementById('request-result');
+      log('Requesting microphone permission...');
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        resultDiv.innerHTML = `<div class="status success">✅ Permission GRANTED! Microphone is accessible.</div>`;
+        log('✅ Permission granted successfully!');
+
+        // Stop the stream immediately (we just wanted permission)
+        stream.getTracks().forEach(track => track.stop());
+
+        // Refresh permission state
+        checkPermissionState();
+
+      } catch (error) {
+        let errorMessage = '';
+        let errorClass = 'error';
+
+        if (error.name === 'NotAllowedError') {
+          errorMessage = '❌ Permission DENIED - User denied microphone access or browser blocked the request.';
+          log('❌ Permission denied by user or browser', 'error');
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '❌ No microphone found - No microphone device is available.';
+          log('❌ No microphone device found', 'error');
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = '❌ Not supported - HTTPS is required for microphone access.';
+          log('❌ HTTPS required', 'error');
+        } else {
+          errorMessage = `❌ Error: ${error.name} - ${error.message}`;
+          log(`❌ Error: ${error.name} - ${error.message}`, 'error');
+        }
+
+        resultDiv.innerHTML = `<div class="status ${errorClass}">${errorMessage}</div>`;
+
+        // Refresh permission state
+        checkPermissionState();
+      }
+    }
+
+    // Test microphone stream with visualization
+    async function testMicrophoneStream() {
+      const resultDiv = document.getElementById('stream-result');
+      const canvas = document.getElementById('visualizer');
+      const stopBtn = document.getElementById('stop-btn');
+
+      log('Testing microphone stream...');
+
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        resultDiv.innerHTML = `<div class="status success">✅ Microphone stream active! Speak to see visualization.</div>`;
+        log('✅ Microphone stream started successfully!');
+
+        canvas.style.display = 'block';
+        stopBtn.disabled = false;
+
+        // Set up audio visualization
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(audioStream);
+        source.connect(analyser);
+        analyser.fftSize = 256;
+
+        // Visualize audio
+        visualize();
+
+      } catch (error) {
+        let errorMessage = '';
+
+        if (error.name === 'NotAllowedError') {
+          errorMessage = '❌ Permission denied - Please click "Request Microphone Access" first.';
+          log('❌ Permission denied', 'error');
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = '❌ No microphone found';
+          log('❌ No microphone found', 'error');
+        } else {
+          errorMessage = `❌ Error: ${error.message}`;
+          log(`❌ Error: ${error.message}`, 'error');
+        }
+
+        resultDiv.innerHTML = `<div class="status error">${errorMessage}</div>`;
+      }
+    }
+
+    // Visualize audio
+    function visualize() {
+      const canvas = document.getElementById('visualizer');
+      const ctx = canvas.getContext('2d');
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+
+      function draw() {
+        animationId = requestAnimationFrame(draw);
+
+        analyser.getByteFrequencyData(dataArray);
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = dataArray[i] / 2;
+
+          const r = barHeight + 25;
+          const g = 250 * (barHeight / canvas.height);
+          const b = 50;
+
+          ctx.fillStyle = `rgb(${r},${g},${b})`;
+          ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+          x += barWidth + 1;
+        }
+      }
+
+      draw();
+    }
+
+    // Stop microphone
+    function stopMicrophone() {
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+        audioStream = null;
+        log('Microphone stopped');
+      }
+
+      if (audioContext) {
+        audioContext.close();
+        audioContext = null;
+      }
+
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+
+      document.getElementById('visualizer').style.display = 'none';
+      document.getElementById('stop-btn').disabled = true;
+      document.getElementById('stream-result').innerHTML = '<div class="status info">ℹ️ Microphone stopped</div>';
+    }
+
+    // Load debug info
+    function loadDebugInfo() {
+      const debugDiv = document.getElementById('debug-info');
+
+      const info = {
+        'URL': window.location.href,
+        'Protocol': window.location.protocol,
+        'Host': window.location.host,
+        'User Agent': navigator.userAgent,
+        'MediaDevices API': !!navigator.mediaDevices,
+        'getUserMedia Available': !!navigator.mediaDevices?.getUserMedia,
+        'Permissions API': !!navigator.permissions,
+        'Secure Context (HTTPS)': window.isSecureContext,
+        'In iframe': window !== window.top,
+        'Parent origin': window !== window.top ? document.referrer : 'N/A'
+      };
+
+      debugDiv.textContent = JSON.stringify(info, null, 2);
+    }
+
+    // Initialize on load
+    window.addEventListener('DOMContentLoaded', () => {
+      log('Page loaded');
+      loadDebugInfo();
+      checkPermissionState();
+    });
+
+    // Log errors
+    window.addEventListener('error', (e) => {
+      log(`Error: ${e.message}`, 'error');
+    });
+  </script>
+</body>
+</html>
