@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LeadConnector Widget Loader</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    #widget-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+
+    /* Loading state */
+    #loading {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 1000;
+    }
+
+    #loading.hidden {
+      display: none;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #e8e8e8;
+      border-top-color: #4285f4;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #loading p {
+      margin-top: 20px;
+      color: #5f6368;
+      font-size: 14px;
+    }
+
+    /* Error state */
+    #error {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      padding: 24px;
+      display: none;
+      max-width: 400px;
+    }
+
+    #error.show {
+      display: block;
+    }
+
+    #error-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    #error h2 {
+      font-size: 18px;
+      color: #d93025;
+      margin-bottom: 8px;
+    }
+
+    #error p {
+      color: #5f6368;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+
+    #retry-btn {
+      background: #4285f4;
+      color: white;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    #retry-btn:hover {
+      background: #3367d6;
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <p>Loading chat widget...</p>
+  </div>
+
+  <div id="error">
+    <div id="error-icon">⚠️</div>
+    <h2>Failed to Load Widget</h2>
+    <p id="error-message">Unable to load the chat widget.</p>
+    <button id="retry-btn" onclick="location.reload()">Retry</button>
+  </div>
+
+  <div id="widget-container"></div>
+
+  <script>
+    // Parse URL parameters
+    const params = new URLSearchParams(window.location.search);
+    const widgetId = params.get('widgetId') || '68f2de8d160cd5f3f3058dbe';
+    const locationId = params.get('locationId') || 'xNwqfxGGXnP9LYh6kWdO';
+    const useGTM = params.get('gtm') === 'true';
+
+    console.log('Widget Loader - Configuration:', {
+      widgetId,
+      locationId,
+      useGTM,
+      url: window.location.href
+    });
+
+    // Function to show error
+    function showError(message) {
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('error-message').textContent = message;
+      document.getElementById('error').classList.add('show');
+    }
+
+    // Function to hide loading
+    function hideLoading() {
+      setTimeout(() => {
+        document.getElementById('loading').classList.add('hidden');
+      }, 1000);
+    }
+
+    // Load widget
+    function loadWidget() {
+      try {
+        // For GTM mode, create the container div
+        if (useGTM && locationId) {
+          console.log('Using GTM mode');
+          const chatDiv = document.createElement('div');
+          chatDiv.setAttribute('data-chat-widget', '');
+          chatDiv.setAttribute('data-widget-id', widgetId);
+          chatDiv.setAttribute('data-location-id', locationId);
+          document.getElementById('widget-container').appendChild(chatDiv);
+        }
+
+        // Create and inject the widget script
+        const script = document.createElement('script');
+        script.src = 'https://beta.leadconnectorhq.com/loader.js';
+        script.setAttribute('data-resources-url', 'https://beta.leadconnectorhq.com/chat-widget/loader.js');
+        script.setAttribute('data-widget-id', widgetId);
+
+        // Success handler
+        script.onload = () => {
+          console.log('Widget script loaded successfully');
+          hideLoading();
+        };
+
+        // Error handler
+        script.onerror = (error) => {
+          console.error('Failed to load widget script:', error);
+          showError('Failed to load widget script. Please check your internet connection.');
+        };
+
+        // Inject script
+        document.body.appendChild(script);
+
+        // Timeout fallback (hide loading after 5 seconds regardless)
+        setTimeout(() => {
+          hideLoading();
+        }, 5000);
+
+      } catch (error) {
+        console.error('Error loading widget:', error);
+        showError('Error: ' + error.message);
+      }
+    }
+
+    // Start loading when DOM is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', loadWidget);
+    } else {
+      loadWidget();
+    }
+
+    // Log any console errors for debugging
+    window.addEventListener('error', (event) => {
+      console.error('Page error:', event.error);
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('Unhandled promise rejection:', event.reason);
+    });
+  </script>
+</body>
+</html>
